@@ -719,7 +719,7 @@ function buildVisualActions(suburb, profile, band, timing) {
 function buildActionRoute(suburb, profile, band, timing, refuge) {
   const route = []
   route.push({
-    stage: 'Now',
+    stage: 'Prepare',
     title: timing.title,
     metric: timing.text,
     points: ['Check symptoms', 'Drink water'],
@@ -727,7 +727,7 @@ function buildActionRoute(suburb, profile, band, timing, refuge) {
   })
   if (profile.outdoorActivity !== 'none') {
     route.push({
-      stage: 'During trip',
+      stage: 'Travel',
       title: refuge.name,
       metric: `${refuge.type}, ${refuge.distanceKm.toFixed(1)} km`,
       points: ['Stay in shade', 'Take breaks'],
@@ -735,7 +735,7 @@ function buildActionRoute(suburb, profile, band, timing, refuge) {
     })
   }
   route.push({
-    stage: 'After',
+    stage: 'Recover',
     title: 'Cool down',
     metric: 'Return to cool space',
     points: ['Rest in AC', 'Monitor symptoms'],
