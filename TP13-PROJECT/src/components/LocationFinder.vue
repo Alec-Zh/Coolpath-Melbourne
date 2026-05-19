@@ -6,6 +6,10 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  skipAutoLocate: {
+    type: Boolean,
+    default: false,
+  },
 })
 
 const emit = defineEmits(['suburb-found', 'out-of-range'])
@@ -63,7 +67,7 @@ function locate() {
 }
 
 onMounted(() => {
-  if (props.suburbs.length > 0) locate()
+  if (props.suburbs.length > 0 && !props.skipAutoLocate) locate()
 })
 </script>
 

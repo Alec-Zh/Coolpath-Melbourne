@@ -1160,7 +1160,7 @@ const adviceItems = computed(() => {
 
         <!-- Full-width navigation row -->
         <div class="nav-links">
-          <RouterLink to="/heatmap" class="nav-link-btn">
+          <RouterLink :to="{ path: '/heatmap', query: { suburbId: selectedSuburbId } }" class="nav-link-btn">
             <svg
               width="14"
               height="14"
@@ -1180,7 +1180,7 @@ const adviceItems = computed(() => {
             </svg>
             Check heat map
           </RouterLink>
-          <RouterLink to="/trip-coach" class="nav-link-btn">
+          <RouterLink :to="{ path: '/trip-coach', query: { suburbId: selectedSuburbId } }" class="nav-link-btn">
             <svg
               width="14"
               height="14"

@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import SuburbSearch from '../components/SuburbSearch.vue'
 import SuburbDetail from '../components/SuburbDetail.vue'
@@ -77,6 +78,8 @@ const INNER_MELBOURNE = new Set([
   'Windsor (Vic.)',
   'Test Suburb', // 🧪 TEST ONLY — remove before production
 ])
+
+const route = useRoute()
 
 const allSuburbs = ref([])
 const loading = ref(true)
@@ -157,7 +160,16 @@ function onOutOfRange() {
   showOutOfRangePopup.value = true
 }
 
-onMounted(fetchSuburbs)
+onMounted(async () => {
+  await fetchSuburbs()
+  // Auto-select suburb passed via route query (e.g. from Outfit Advisor or Trip Coach)
+  if (route.query.suburbId) {
+    const match = innerSuburbs.value.find(
+      (s) => String(s.suburb_id) === String(route.query.suburbId),
+    )
+    if (match) selectSuburb(match)
+  }
+})
 </script>
 
 <template>
@@ -190,6 +202,7 @@ onMounted(fetchSuburbs)
           <span class="location-label">Or use your current location:</span>
           <LocationFinder
             :suburbs="innerSuburbs"
+            :skipAutoLocate="!!route.query.suburbId"
             @suburb-found="onSuburbFound"
             @out-of-range="onOutOfRange"
           />

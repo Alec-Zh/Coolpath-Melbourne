@@ -23,7 +23,7 @@ const searchQuery = ref('')
 const dropdownOpen = ref(false)
 
 const selectedSuburb = computed(
-  () => props.suburbs.find((s) => s.suburb_id === props.selectedSuburbId) ?? null,
+  () => props.suburbs.find((s) => String(s.suburb_id) === String(props.selectedSuburbId)) ?? null,
 )
 
 const filteredSuburbs = computed(() => {
@@ -33,7 +33,7 @@ const filteredSuburbs = computed(() => {
 })
 
 function selectSuburb(suburb) {
-  emit('update:selectedSuburbId', suburb.suburb_id)
+  emit('update:selectedSuburbId', String(suburb.suburb_id))
   searchQuery.value = ''
   dropdownOpen.value = false
 }
