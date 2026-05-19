@@ -1,19 +1,12 @@
 <script setup>
-import { ref } from 'vue'
 import BackToTop from './components/BackToTop.vue'
-import PasswordGate from './components/PasswordGate.vue'
-
-const unlocked = ref(sessionStorage.getItem('melbcool_access') === 'true')
 </script>
 
 <template>
-  <PasswordGate v-if="!unlocked" @unlocked="unlocked = true" />
-  <template v-else>
-    <div class="mhome">
+  <div class="mhome">
     <RouterView />
-    </div>
-    <BackToTop />
-  </template>
+  </div>
+  <BackToTop />
 </template>
 
 <style>
