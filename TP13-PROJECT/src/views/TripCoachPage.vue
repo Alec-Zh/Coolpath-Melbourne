@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import NavBar from '../components/NavBar.vue'
 import Footer from '../components/Footer.vue'
 import TripPlannerForm from '../components/TripPlannerForm.vue'
@@ -39,6 +39,7 @@ const showResults = ref(false)
 const showDetail = ref(false)
 
 const router = useRouter()
+const route = useRoute()
 
 function goToOutfitAdvisor() {
   if (selectedSuburbId.value) {
@@ -53,6 +54,13 @@ onMounted(async () => {
     const res = await fetch(`${API_BASE}/suburbs`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     allSuburbs.value = (await res.json()).sort((a, b) => a.suburb_name.localeCompare(b.suburb_name))
+    // Auto-select suburb passed via route query (e.g. from Outfit Advisor or Heat Map)
+    if (route.query.suburbId) {
+      const match = allSuburbs.value.find(
+        (s) => String(s.suburb_id) === String(route.query.suburbId),
+      )
+      if (match) selectedSuburbId.value = String(match.suburb_id)
+    }
   } catch (e) {
     error.value = 'Could not load suburb data. Please try again.'
     console.error(e)
@@ -67,7 +75,7 @@ const durationMins = ref(30)
 const departureMinutes = ref(540)
 
 const selectedSuburb = computed(
-  () => allSuburbs.value.find((s) => s.suburb_id === selectedSuburbId.value) ?? null,
+  () => allSuburbs.value.find((s) => String(s.suburb_id) === String(selectedSuburbId.value)) ?? null,
 )
 const departureLabel = computed(() => minutesToLabel(departureMinutes.value))
 
@@ -460,7 +468,7 @@ const verdictMessage = computed(() => {
 
           <!-- Nav links at bottom -->
           <div class="trip-nav-links">
-            <RouterLink to="/heatmap" class="trip-nav-btn trip-nav-btn--green">
+            <RouterLink :to="{ path: '/heatmap', query: { suburbId: selectedSuburbId } }" class="trip-nav-btn trip-nav-btn--green">
               <svg
                 width="13"
                 height="13"

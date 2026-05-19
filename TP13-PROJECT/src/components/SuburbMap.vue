@@ -129,6 +129,12 @@ async function initMap() {
     if (props.userLocation) {
       updateLocationMarker(props.userLocation)
     }
+
+    // 地图初始化完成后，如果父组件已经传入了 selectedSuburb（从路由跳转），补一次 flyTo
+    if (props.selectedSuburb) {
+      refreshStyles()
+      flyToSuburb(props.selectedSuburb)
+    }
   } catch (e) {
     console.error('Failed to load GeoJSON:', e)
   }
