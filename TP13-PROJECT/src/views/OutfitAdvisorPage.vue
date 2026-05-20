@@ -20,21 +20,53 @@ const selectedSuburb = computed(
   () => allSuburbs.value.find((s) => s.suburb_id === Number(selectedSuburbId.value)) ?? null,
 )
 
+// ── Selection state — declared early so clearSearch can reference it ──────────
+const selectedItems = ref(new Set())
+
+// ── Search bar state ──────────────────────────────────────────────────────────
+const searchQuery = ref('')
+const searchFocused = ref(false)
+const searchInputRef = ref(null)
+
+const filteredSuburbs = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return allSuburbs.value
+  return allSuburbs.value.filter((s) => s.suburb_name.toLowerCase().includes(q))
+})
+
+function selectSuburb(suburb) {
+  selectedSuburbId.value = String(suburb.suburb_id)
+  searchQuery.value = suburb.suburb_name
+  searchFocused.value = false
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  selectedSuburbId.value = ''
+  selectedItems.value = new Set()
+  searchInputRef.value?.focus()
+}
+
+function onSearchBlur() {
+  // Delay so click on dropdown item registers first
+  setTimeout(() => { searchFocused.value = false }, 150)
+}
+
 onMounted(async () => {
   try {
     const res = await fetch(`${API_BASE}/suburbs`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     allSuburbs.value = (await res.json()).sort((a, b) => a.suburb_name.localeCompare(b.suburb_name))
-    // Prefer suburbId from route query (passed from SuburbDetail),
-    // fall back to first suburb in list
+    // If suburbId passed from another page, auto-select it
     const queryId = route.query.suburbId
     if (queryId && allSuburbs.value.find((s) => s.suburb_id === Number(queryId))) {
       selectedSuburbId.value = String(queryId)
-    } else if (allSuburbs.value.length) {
-      selectedSuburbId.value = String(allSuburbs.value[0].suburb_id)
+      const match = allSuburbs.value.find((s) => s.suburb_id === Number(queryId))
+      if (match) searchQuery.value = match.suburb_name
+      await nextTick()
+      autoSelectBestOutfit()
     }
-    await nextTick()
-    autoSelectBestOutfit()
+    // No fallback — user must select a suburb themselves
   } catch (e) {
     error.value = 'Could not load suburb data. Please try again.'
     console.error(e)
@@ -559,7 +591,6 @@ function isGroupExpanded(groupKey) {
 }
 
 // ── Selection state (AC 4.2.3) ───────────────────────────────────────────────
-const selectedItems = ref(new Set())
 
 function toggleItem(id) {
   const next = new Set(selectedItems.value)
@@ -757,12 +788,13 @@ const adviceItems = computed(() => {
       <div v-else-if="error" class="status-msg status-msg--error">{{ error }}</div>
 
       <template v-else>
-        <!-- Suburb selector (AC 4.1.3) -->
+        <!-- Suburb search bar -->
         <div class="selector-row card">
-          <label for="suburb-select" class="selector-label">
+          <div class="search-wrap">
             <svg
-              width="14"
-              height="14"
+              class="search-icon"
+              width="16"
+              height="16"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -771,19 +803,47 @@ const adviceItems = computed(() => {
               stroke-linejoin="round"
               aria-hidden="true"
             >
-              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
-            Suburb
-          </label>
-          <select id="suburb-select" v-model="selectedSuburbId" class="suburb-select">
-            <option v-for="s in allSuburbs" :key="s.suburb_id" :value="String(s.suburb_id)">
-              {{ s.suburb_name }}
-            </option>
-          </select>
+            <input
+              ref="searchInputRef"
+              v-model="searchQuery"
+              type="text"
+              class="search-input"
+              placeholder="Search suburb..."
+              autocomplete="off"
+              @focus="searchFocused = true"
+              @blur="onSearchBlur"
+            />
+            <button
+              v-if="searchQuery"
+              class="clear-btn"
+              @click="clearSearch"
+              aria-label="Clear suburb"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+            <!-- Dropdown -->
+            <ul v-if="searchFocused && filteredSuburbs.length" class="search-dropdown">
+              <li
+                v-for="s in filteredSuburbs"
+                :key="s.suburb_id"
+                class="search-option"
+                :class="{ 'search-option--active': s.suburb_id === Number(selectedSuburbId) }"
+                @mousedown.prevent="selectSuburb(s)"
+              >
+                {{ s.suburb_name }}
+              </li>
+            </ul>
+            <p v-if="searchFocused && searchQuery && !filteredSuburbs.length" class="search-empty">
+              No suburbs found
+            </p>
+          </div>
         </div>
 
-        <!-- AC 4.1.2 — Weather summary card -->
+        <!-- Content only shown after a suburb is selected -->
+        <template v-if="selectedSuburbId">
         <OutfitWeatherCard :suburb="selectedSuburb" />
 
         <!-- Climate mode indicator -->
@@ -1198,6 +1258,8 @@ const adviceItems = computed(() => {
             Plan a trip
           </RouterLink>
         </div>
+        </template>
+        <!-- end v-if="selectedSuburbId" -->
       </template>
     </div>
 
@@ -1274,36 +1336,117 @@ const adviceItems = computed(() => {
 .selector-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 1rem;
+  padding: 0.5rem 0.75rem;
 }
 
-.selector-label {
+.search-wrap {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #6b6560;
-  white-space: nowrap;
+  width: 100%;
+  gap: 0;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: #9e9890;
+  pointer-events: none;
   flex-shrink: 0;
 }
 
-.suburb-select {
+.search-input {
   flex: 1;
+  width: 100%;
   border: 1px solid #d8eae6;
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 10px;
+  padding: 9px 40px 9px 38px;
   font-size: 15px;
   background: #f4faf8;
   color: #1a1714;
-  cursor: pointer;
   font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.suburb-select:focus {
-  outline: 2px solid #4d9e5a;
-  outline-offset: 1px;
+.search-input::placeholder {
+  color: #b0aaa4;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #4d9e5a;
+  box-shadow: 0 0 0 3px rgba(77, 158, 90, 0.12);
+}
+
+.clear-btn {
+  position: absolute;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: #e8e4e0;
+  color: #6b6560;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.15s;
+}
+
+.clear-btn:hover {
+  background: #d8d4d0;
+}
+
+.search-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #d8eae6;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+  z-index: 100;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.search-option {
+  padding: 9px 14px;
+  font-size: 14px;
+  color: #1a1714;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.search-option:hover {
+  background: #f4faf8;
+}
+
+.search-option--active {
+  background: #e6f4e8;
+  color: #2d7a3a;
+  font-weight: 600;
+}
+
+.search-empty {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #d8eae6;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #9e9890;
+  z-index: 100;
+  margin: 0;
 }
 
 /* Climate mode banner */
