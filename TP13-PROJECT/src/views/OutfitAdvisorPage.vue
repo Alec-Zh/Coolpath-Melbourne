@@ -48,11 +48,67 @@ function clearSearch() {
 }
 
 function onSearchBlur() {
-  // Delay so click on dropdown item registers first
   setTimeout(() => { searchFocused.value = false }, 150)
 }
 
+// ── Guided tour ───────────────────────────────────────────────────────────────
+// Steps: 1 = pick suburb, 2 = read weather, 3 = pick items, 4 = check score, 0 = done
+const TOUR_KEY = 'coolpath_outfit_tour_done'
+const tourStep = ref(0)
+
+const tourActive = computed(() => tourStep.value >= 1)
+
+// Refs for scrollIntoView on each highlighted section
+const refWeatherCard = ref(null)
+const refItemsCol = ref(null)
+const refLeftCol = ref(null)
+
+function scrollToRef(el) {
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function tourNext() {
+  if (tourStep.value >= 4) {
+    endTour()
+    return
+  }
+  tourStep.value++
+  nextTick(() => {
+    if (tourStep.value === 2) scrollToRef(refWeatherCard.value)
+    if (tourStep.value === 3) scrollToRef(refItemsCol.value)
+    if (tourStep.value === 4) scrollToRef(refLeftCol.value)
+  })
+}
+
+function endTour() {
+  tourStep.value = 0
+  try { sessionStorage.setItem(TOUR_KEY, '1') } catch {}
+}
+
+function restartTour() {
+  tourStep.value = selectedSuburbId.value ? 2 : 1
+  try { sessionStorage.removeItem(TOUR_KEY) } catch {}
+  nextTick(() => {
+    if (tourStep.value === 2) scrollToRef(refWeatherCard.value)
+    else scrollToRef(searchInputRef.value)
+  })
+}
+
+// Advance tour step 1 → 2 automatically when suburb is selected
+watch(selectedSuburbId, (val) => {
+  if (val && tourStep.value === 1) {
+    tourStep.value = 2
+    nextTick(() => scrollToRef(refWeatherCard.value))
+  }
+})
+
 onMounted(async () => {
+  // Start tour unless already completed this session
+  let tourDone = false
+  try { tourDone = !!sessionStorage.getItem(TOUR_KEY) } catch {}
+  if (!tourDone) tourStep.value = 1
+
   try {
     const res = await fetch(`${API_BASE}/suburbs`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -63,6 +119,8 @@ onMounted(async () => {
       selectedSuburbId.value = String(queryId)
       const match = allSuburbs.value.find((s) => s.suburb_id === Number(queryId))
       if (match) searchQuery.value = match.suburb_name
+      // Skip step 1 if suburb pre-selected via query param
+      if (tourStep.value === 1) tourStep.value = 2
       await nextTick()
       autoSelectBestOutfit()
     }
@@ -789,42 +847,24 @@ const adviceItems = computed(() => {
 
       <template v-else>
         <!-- Suburb search bar -->
-        <div class="selector-row card">
+        <div class="selector-row card" :class="{ 'tour-highlight': tourActive && tourStep === 1 }">
           <div class="search-wrap">
-            <svg
-              class="search-icon"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
             </svg>
             <input
               ref="searchInputRef"
               v-model="searchQuery"
               type="text"
               class="search-input"
-              placeholder="Search suburb..."
+              :placeholder="tourActive && tourStep === 1 ? 'Type your suburb to begin...' : 'Search suburb...'"
               autocomplete="off"
               @focus="searchFocused = true"
               @blur="onSearchBlur"
             />
-            <button
-              v-if="searchQuery"
-              class="clear-btn"
-              @click="clearSearch"
-              aria-label="Clear suburb"
-            >
+            <button v-if="searchQuery" class="clear-btn" @click="clearSearch" aria-label="Clear suburb">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
-            <!-- Dropdown -->
             <ul v-if="searchFocused && filteredSuburbs.length" class="search-dropdown">
               <li
                 v-for="s in filteredSuburbs"
@@ -832,50 +872,64 @@ const adviceItems = computed(() => {
                 class="search-option"
                 :class="{ 'search-option--active': s.suburb_id === Number(selectedSuburbId) }"
                 @mousedown.prevent="selectSuburb(s)"
-              >
-                {{ s.suburb_name }}
-              </li>
+              >{{ s.suburb_name }}</li>
             </ul>
-            <p v-if="searchFocused && searchQuery && !filteredSuburbs.length" class="search-empty">
-              No suburbs found
-            </p>
+            <p v-if="searchFocused && searchQuery && !filteredSuburbs.length" class="search-empty">No suburbs found</p>
           </div>
         </div>
 
-        <!-- Content only shown after a suburb is selected -->
+        <!-- Tour step 1: pick a suburb (shown before any suburb is selected) -->
+        <div v-if="tourActive && tourStep === 1" class="tour-card tour-card--step1">
+          <div class="tour-step-pip">Step 1 of 4</div>
+          <p class="tour-heading">Start by choosing your suburb</p>
+          <p class="tour-body">
+            Type the name of your suburb in the highlighted search box above.
+            We'll look up today's temperature, UV level, and tree shade for that area —
+            then build outfit recommendations just for those conditions.
+          </p>
+          <button class="tour-skip-btn" @click="endTour">Skip guide</button>
+        </div>
+
+        <!-- Content shown after suburb selected -->
         <template v-if="selectedSuburbId">
-        <OutfitWeatherCard :suburb="selectedSuburb" />
+
+        <!-- AC 4.1.2 — Weather summary card -->
+        <div ref="refWeatherCard" :class="{ 'tour-highlight-wrap': tourActive && tourStep === 2 }">
+          <OutfitWeatherCard :suburb="selectedSuburb" />
+        </div>
+
+        <!-- Tour step 2: understand the weather card -->
+        <div v-if="tourActive && tourStep === 2" class="tour-card">
+          <div class="tour-step-pip">Step 2 of 4</div>
+          <p class="tour-heading">Understanding today's conditions</p>
+          <p class="tour-body">
+            The card above shows four things about your suburb right now:
+          </p>
+          <ul class="tour-list">
+            <li><strong>Feels like</strong> — the temperature your body actually experiences, accounting for humidity and wind. This drives the outfit recommendations.</li>
+            <li><strong>UV Index</strong> — how strong the sun is. When UV is 3 or above, sun protection items like a hat and sunscreen appear.</li>
+            <li><strong>Tree coverage</strong> — how much shade your suburb has. More shade means lower heat risk when outdoors.</li>
+            <li><strong>Risk level</strong> — an overall heat safety rating combining temperature and shade.</li>
+          </ul>
+          <div class="tour-actions">
+            <button class="tour-next-btn" @click="tourNext">Got it, show me the clothes →</button>
+            <button class="tour-skip-btn" @click="endTour">Skip guide</button>
+          </div>
+        </div>
 
         <!-- Climate mode indicator -->
         <div class="mode-banner" :class="`mode-banner--${climateMode}`">
-          <span v-if="climateMode === 'cool'"
-            >🧣 Cool day — recommendations are adjusted for lower temperatures</span
-          >
-          <span v-else-if="climateMode === 'mild'"
-            >🌤 Mild day — balanced recommendations for comfortable conditions</span
-          >
+          <span v-if="climateMode === 'cool'">🧣 Cool day — recommendations are adjusted for lower temperatures</span>
+          <span v-else-if="climateMode === 'mild'">🌤 Mild day — balanced recommendations for comfortable conditions</span>
           <span v-else>☀️ Hot day — heat safety recommendations are active</span>
-          <span v-if="!uvHigh" class="uv-note">
-            | UV is low — sunglasses and sunscreen not shown</span
-          >
+          <span v-if="!uvHigh" class="uv-note"> | UV is low — sunglasses and sunscreen not shown</span>
         </div>
 
-        <!-- Main grid: mannequin + item list -->
-        <!-- How to use — full width above main grid -->
-        <div class="guide-card card">
-          <p class="guide-title">How to use</p>
-          <ul class="guide-list guide-list--row">
-            <li>Tap any item to add it to your outfit</li>
-            <li>The mannequin updates as you select</li>
-            <li>Green items lower your heat exposure</li>
-            <li>Red items raise your heat risk</li>
-            <li>Your score updates in real time</li>
-          </ul>
-        </div>
+        <!-- Tour step 3: picking clothing items — guide moved inside items-col below -->
 
         <div class="main-grid">
-          <!-- Left column: mannequin only -->
-          <div class="left-col">
+          <!-- Left column: mannequin + score + advice -->
+          <div ref="refLeftCol" class="left-col" :class="{ 'tour-highlight-wrap': tourActive && tourStep === 4 }">
             <!-- Mannequin + score (AC 4.2.1 + 4.2.2) -->
             <div class="mannequin-col card">
               <p class="col-label">Outfit preview</p>
@@ -1161,11 +1215,44 @@ const adviceItems = computed(() => {
                 </li>
               </ul>
             </div>
+
+            <!-- Tour step 4: score + mannequin + advice -->
+            <div v-if="tourActive && tourStep === 4" class="tour-card">
+              <div class="tour-step-pip">Step 4 of 4</div>
+              <p class="tour-heading">Your outfit preview and score</p>
+              <p class="tour-body">The highlighted panel on the left shows three things:</p>
+              <ul class="tour-list">
+                <li><strong>Mannequin</strong> — updates in real time as you tap items. You can see exactly what you've selected at a glance.</li>
+                <li><strong>Heat exposure score</strong> — an estimated temperature your body will feel in this outfit. Lower is safer. The bar colour changes from green to red as risk rises.</li>
+                <li><strong>Personalised advice</strong> — plain-language tips based on the specific items you've chosen and today's conditions.</li>
+              </ul>
+              <p class="tour-body">Try tapping different items in the list to see how your score changes.</p>
+              <div class="tour-actions">
+                <button class="tour-next-btn" @click="endTour">Done — let me try it ✓</button>
+              </div>
+            </div>
           </div>
           <!-- end left-col -->
 
           <!-- Item list — grouped by category -->
-          <div class="items-col">
+          <div ref="refItemsCol" class="items-col" :class="{ 'tour-highlight-wrap': tourActive && tourStep === 3 }">
+            <!-- Tour step 3: picking items — guide at top of items col -->
+            <div v-if="tourActive && tourStep === 3" class="tour-card">
+              <div class="tour-step-pip">Step 3 of 4</div>
+              <p class="tour-heading">Choose your clothing items</p>
+              <p class="tour-body">The list to the right is your wardrobe for today. Here's how to read it:</p>
+              <ul class="tour-list">
+                <li><span class="tour-tag tour-tag--good">Green items</span> are recommended for today's heat and UV — tap to add them to your outfit.</li>
+                <li><span class="tour-tag tour-tag--bad">Red items</span> are best avoided — they raise your heat exposure. They're shown so you know what to leave at home.</li>
+                <li>Each group (Head, Top, Bottom, Footwear) only lets you pick <strong>one item per slot</strong> — selecting a new one swaps the old one out.</li>
+                <li>Tap <strong>Show more options</strong> in any group to see all available items, including less common ones.</li>
+              </ul>
+              <div class="tour-actions">
+                <button class="tour-next-btn" @click="tourNext">Got it, show me my score →</button>
+                <button class="tour-skip-btn" @click="endTour">Skip guide</button>
+              </div>
+            </div>
+
             <!-- Based on banner -->
             <div class="basis-row">
               <p class="recommendation-basis">
@@ -1260,6 +1347,15 @@ const adviceItems = computed(() => {
         </div>
         </template>
         <!-- end v-if="selectedSuburbId" -->
+
+        <!-- Restart tour button — always visible after tour is done -->
+        <div v-if="!tourActive" class="tour-restart-row">
+          <button class="tour-restart-btn" @click="restartTour" aria-label="Restart guide">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            How to use this page
+          </button>
+        </div>
+
       </template>
     </div>
 
@@ -1332,7 +1428,7 @@ const adviceItems = computed(() => {
   font-weight: 600;
 }
 
-/* Suburb selector */
+/* Suburb search bar */
 .selector-row {
   display: flex;
   align-items: center;
@@ -1344,7 +1440,6 @@ const adviceItems = computed(() => {
   display: flex;
   align-items: center;
   width: 100%;
-  gap: 0;
 }
 
 .search-icon {
@@ -1449,6 +1544,191 @@ const adviceItems = computed(() => {
   margin: 0;
 }
 
+/* Tour highlight */
+@keyframes tour-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px #f0c040, 0 0 14px 5px rgba(240, 180, 0, 0.30); }
+  50%       { box-shadow: 0 0 0 3px #f0c040, 0 0 24px 10px rgba(240, 180, 0, 0.50); }
+}
+
+.tour-highlight {
+  outline: none;
+  border-color: #f0c040 !important;
+  animation: tour-glow-pulse 2s ease-in-out infinite;
+  border-radius: 14px;
+}
+
+.tour-highlight-wrap {
+  border-radius: 14px;
+  animation: tour-glow-pulse 2s ease-in-out infinite;
+}
+
+/* Tour list */
+.tour-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tour-list li {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #3a3530;
+  padding-left: 14px;
+  position: relative;
+}
+
+.tour-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #4d9e5a;
+}
+
+/* Guided tour cards */
+.tour-card {
+  background: #ffffff;
+  border: 2px solid #4d9e5a;
+  border-radius: 14px;
+  padding: 1.25rem 1.4rem 1.1rem;
+  box-shadow: 0 4px 20px rgba(45, 122, 58, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.tour-card--step1 {
+  border-left: 4px solid #2d7a3a;
+  border-top-color: #d8eae6;
+  border-right-color: #d8eae6;
+  border-bottom-color: #d8eae6;
+  border-width: 1px;
+  border-left-width: 4px;
+  box-shadow: none;
+  background: #f7fbf8;
+}
+
+.tour-step-pip {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #4d9e5a;
+}
+
+.tour-heading {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1714;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.tour-body {
+  font-size: 15px;
+  line-height: 1.65;
+  color: #3a3530;
+  margin: 0;
+}
+
+.tour-tag {
+  display: inline-block;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  margin: 0 1px;
+}
+
+.tour-tag--good {
+  background: #e6f4e8;
+  color: #1e5c28;
+}
+
+.tour-tag--bad {
+  background: #fce8e6;
+  color: #8b1a12;
+}
+
+.tour-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.tour-next-btn {
+  padding: 0.7rem 1.4rem;
+  background: #2d7a3a;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.tour-next-btn:hover {
+  filter: brightness(1.1);
+}
+
+.tour-next-btn:active {
+  transform: scale(0.97);
+}
+
+.tour-skip-btn {
+  background: none;
+  border: none;
+  font-size: 13px;
+  color: #9e9890;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.tour-skip-btn:hover {
+  color: #6b6560;
+}
+
+/* Restart tour row */
+.tour-restart-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tour-restart-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid #d8eae6;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b6560;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.tour-restart-btn:hover {
+  background: #f4faf8;
+  border-color: #4d9e5a;
+  color: #2d7a3a;
+}
+
 /* Climate mode banner */
 .mode-banner {
   padding: 0.65rem 1rem;
@@ -1516,53 +1796,6 @@ const adviceItems = computed(() => {
   flex-grow: 1;
 }
 
-/* Guide card — full width horizontal strip */
-.guide-card {
-  padding: 0.875rem 1.25rem;
-}
-
-.guide-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #2d7a3a;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  margin: 0 0 8px;
-}
-
-.guide-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.guide-list--row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px 16px;
-}
-
-.guide-list li {
-  font-size: 15px;
-  color: #6b6560;
-  line-height: 1.5;
-  padding-left: 13px;
-  position: relative;
-}
-
-.guide-list li::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #4d9e5a;
-  position: absolute;
-  left: 0;
-  top: 6px;
-}
 
 .col-label {
   font-size: 14px;
