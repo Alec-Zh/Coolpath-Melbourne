@@ -5,6 +5,7 @@ import Footer from '@/components/Footer.vue'
 import WelcomeModal from '@/components/WelcomeModal.vue'
 import TemperatureAlert from '@/components/TemperatureAlert.vue'
 import Directions from '@/components/DIRECTIONS.vue'
+import SearchableSelect from '@/components/SearchableSelect.vue'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 const photoObj = {
@@ -45,7 +46,8 @@ const API_BASE_URL = 'https://qcbqul6ys2.execute-api.ap-southeast-2.amazonaws.co
 const refuges = ref([])
 const loading = ref(false)
 const error = ref(null)
-const searchQuery = ref('')
+const selectedCity = ref('')
+const cityOptions = ref([])
 const selectedType = ref('all')
 const openStatusFilter = ref('all')
 const userLocation = ref(null)
@@ -308,6 +310,20 @@ const getDistanceValue = (refuge) => {
   )
 }
 
+// 获取所有城市列表
+const fetchCities = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/cool-refuges`)
+    const result = await response.json()
+    if (result.success && result.data) {
+      const cities = [...new Set(result.data.map((r) => r.city).filter(Boolean))]
+      cityOptions.value = cities.sort()
+    }
+  } catch (err) {
+    console.error('Error fetching cities:', err)
+  }
+}
+
 // 获取数据
 const fetchRefuges = async () => {
   loading.value = true
@@ -322,8 +338,8 @@ const fetchRefuges = async () => {
     const params = new URLSearchParams()
 
     // 添加搜索参数
-    if (searchQuery.value.trim()) {
-      params.append('name', searchQuery.value.trim())
+    if (selectedCity.value) {
+      params.append('city', selectedCity.value)
     }
 
     // 添加类型参数
@@ -351,7 +367,7 @@ const fetchRefuges = async () => {
   }
 }
 
-// 搜索
+// 筛选城市
 const handleSearch = async () => {
   currentPage.value = 1
   await fetchRefuges()
@@ -493,7 +509,7 @@ const addMarkers = () => {
   console.log('Adding markers to map...')
 
   // 10km 距离限制
-  const MAX_DISTANCE_KM = 15
+  const MAX_DISTANCE_KM = 10
 
   // 过滤出 10km 以内的避暑场所
   const nearbyRefuges = filteredRefuges.value.filter((refuge) => {
@@ -623,6 +639,9 @@ onMounted(async () => {
   // 自动请求位置权限（会触发浏览器弹框）
   getUserLocation()
 
+  // 获取城市列表
+  fetchCities()
+
   // 获取数据
   fetchRefuges()
 })
@@ -651,12 +670,12 @@ onMounted(async () => {
         </div>
 
         <div class="search-container">
-          <input
-            type="text"
-            class="search-input"
-            placeholder="Search by suburb or landmark..."
-            v-model="searchQuery"
-            @keyup.enter="handleSearch"
+          <SearchableSelect
+            v-model="selectedCity"
+            :options="cityOptions"
+            placeholder="Search by city…"
+            :loading="loading"
+            @change="handleSearch"
           />
           <button class="search-button" @click="handleSearch" :disabled="loading">
             {{ loading ? 'Loading...' : 'FIND' }}
@@ -1054,14 +1073,6 @@ onMounted(async () => {
   gap: 0.5rem;
   margin-bottom: 1.5rem;
   width: 100%;
-}
-
-.search-input {
-  flex: 1;
-  padding: 0.75rem 1rem;
-  border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  font-size: 1rem;
 }
 
 .search-button {
