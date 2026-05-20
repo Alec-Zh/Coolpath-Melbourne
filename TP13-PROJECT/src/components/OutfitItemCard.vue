@@ -9,13 +9,18 @@ defineProps({
 defineEmits(['toggle'])
 
 const imageMap = {
-  hat: 'hat', shirt: 'shirt', pants: 'pants', sg: 'sunglasses',
+  hat: 'hat', shirt: 'shirt', sg: 'sunglasses',
   water: 'water', sc: 'sunscreen', warmjacket: 'warmjacket',
   jacket: 'jacket', dshirt: 'dshirt', longsleeve: 'longsleeve',
   scarf: 'scarf', cap: 'cap', umbrella: 'umbrella', flipflops: 'flipflops',
   hoodie: 'hoodie', jeans: 'jeans', shorts: 'shorts', runners: 'runners',
-  sandals: 'sandals', vest: 'vest', linen: 'linen', coolingpatch: 'coolingpatch',
+  sandals: 'sandals', vest: 'vest', coolingpatch: 'coolingpatch',
   gloves: 'gloves', thermals: 'thermals', raincoat: 'raincoat',
+  lighttrousers: 'lighttrousers',
+  warmtrousers: 'warmtrousers',
+  leggings: 'leggings',
+  beanie: 'beanie',
+  warmboots: 'warmboots',
 }
 
 function imgSrc(id) {
