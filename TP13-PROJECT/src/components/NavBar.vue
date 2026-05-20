@@ -16,15 +16,15 @@ const closeMenu = () => {
         <img src="/logo-mark-transparent.png" alt="MelbCool" />
         <span>MelbCool</span>
       </a>
-      <nav class="mh-links" aria-label="Main navigation">
-        <RouterLink to="/" exact-active-class="active">Home</RouterLink>
+      <nav class="mh-links" aria-label="Main navigation" style="display:flex; justify-content:space-evenly; flex:1;">
+
         <RouterLink to="/heatmap" exact-active-class="active">Heat Map</RouterLink>
         <RouterLink to="/cool-refuges" exact-active-class="active">Cool Refuge</RouterLink>
         <RouterLink to="/trip-coach" exact-active-class="active">Trip Coach</RouterLink>
         <RouterLink to="/outfit-advisor" exact-active-class="active">Outfit Advisor</RouterLink>
         <RouterLink to="/safety-plan" exact-active-class="active">Safety Plan</RouterLink>
       </nav>
-      <a class="mh-nav-cta" href="/safety-plan">Plan Today ↗</a>
+      
     </div>
   </header>
 </template>
