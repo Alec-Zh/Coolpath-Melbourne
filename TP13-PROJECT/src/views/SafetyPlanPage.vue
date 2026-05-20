@@ -1,6 +1,7 @@
 <script setup>
 import NavBar from '@/components/NavBar.vue'
 import Footer from '@/components/Footer.vue'
+import LoadingCard from '@/components/LoadingCard.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -427,6 +428,7 @@ let advanceTimer = null
 
 const weatherCache = new Map()
 const planGenerated = ref(false)
+const loadingPlan = ref(false)
 
 const currentQuestion = computed(() => questions[currentStep.value])
 const stepNumber = computed(() => currentStep.value + 1)
@@ -575,6 +577,7 @@ const nextBtnText = computed(() => {
 })
 
 async function generatePlan(options = {}) {
+  loadingPlan.value = true
   planGenerated.value = true
   const suburbBase = selectedSuburb.value
 
@@ -640,6 +643,7 @@ async function generatePlan(options = {}) {
   planStatusText.value = usedFallbackWeather.value
     ? 'Plan generated with fallback demo weather because live weather was unavailable.'
     : 'Plan ready with live weather.'
+  loadingPlan.value = false
 
   if (!options.silent) {
     focusGeneratedPlan()
@@ -719,7 +723,7 @@ function buildVisualActions(suburb, profile, band, timing) {
 function buildActionRoute(suburb, profile, band, timing, refuge) {
   const route = []
   route.push({
-    stage: 'Prepare',
+    stage: 'Now',
     title: timing.title,
     metric: timing.text,
     points: ['Check symptoms', 'Drink water'],
@@ -727,7 +731,7 @@ function buildActionRoute(suburb, profile, band, timing, refuge) {
   })
   if (profile.outdoorActivity !== 'none') {
     route.push({
-      stage: 'Travel',
+      stage: 'During trip',
       title: refuge.name,
       metric: `${refuge.type}, ${refuge.distanceKm.toFixed(1)} km`,
       points: ['Stay in shade', 'Take breaks'],
@@ -735,7 +739,7 @@ function buildActionRoute(suburb, profile, band, timing, refuge) {
     })
   }
   route.push({
-    stage: 'Recover',
+    stage: 'After',
     title: 'Cool down',
     metric: 'Return to cool space',
     points: ['Rest in AC', 'Monitor symptoms'],
@@ -849,6 +853,7 @@ function focusGeneratedPlan() {
 }
 
 function editAnswer(index) {
+  loadingPlan.value = false
   planGenerated.value = false
   currentStep.value = index
 }
@@ -977,15 +982,21 @@ onMounted(() => {})
         </section>
       </section>
 
+      <LoadingCard
+        v-if="loadingPlan"
+        title="Generating your heat plan"
+        :subtitle="'Fetching live weather data for ' + selectedSuburb.name + '…'"
+      />
+
       <article v-if="planGenerated && planData" class="care-plan">
         <section class="care-plan-hero" :class="planData.band.toLowerCase()">
           <div class="care-plan-picture">
             <img :src="'/band' + planData.band + '.png'" class="band-picture"
           </div>
           <div>
-            <button class="back-btn" @click="downloadPlan">
+            <!-- <button class="back-btn" @click="downloadPlan">
               Back
-            </button>
+            </button> -->
             <p class="plan-small-label">Your heat plan</p>
             <h2>{{ planData.band }}</h2>
             <p>{{ riskCopy[planData.band] }}</p>
@@ -1129,6 +1140,10 @@ onMounted(() => {})
 </template>
 
 <style scoped>
+.band-picture{
+  height: 120px;
+  border-radius: 15%;
+}
 .question-cover{
   width: 100%;
   height: 150px;
@@ -1540,10 +1555,12 @@ background: linear-gradient(135deg, rgba(13, 58, 143, 0.95), rgba(11, 127, 121, 
 
 .care-plan-picture {
   position: relative;
-  min-height: 170px;
-  border-radius: 26px;
-  background: linear-gradient(180deg, #dff3ff, #f6fbf3);
-  overflow: hidden;
+    /* min-height: 170px; */
+    border-radius: 26px;
+    /* background: linear-gradient(180deg, #dff3ff, #f6fbf3); */
+    /* overflow: hidden; */
+    display: flex;
+    justify-content: center;
 }
 
 .plan-sun {
@@ -1822,6 +1839,7 @@ background: linear-gradient(135deg, rgba(13, 58, 143, 0.95), rgba(11, 127, 121, 
   display: grid;
   place-items: center;
   color: #0b7f79;
+  background: transparent !important;
 }
 
 .route-picture img {

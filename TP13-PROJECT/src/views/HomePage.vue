@@ -6,7 +6,7 @@ import Footer from '../components/Footer.vue'
 // import './codex-homepage.css'
 const router = useRouter()
 
-const expandedCards = ref([false, false, false, false])
+const expandedCards = ref([true, true, true, true])
 
 const toggleCard = (index) => {
   expandedCards.value[index] = !expandedCards.value[index]
