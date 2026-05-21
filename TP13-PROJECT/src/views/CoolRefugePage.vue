@@ -509,7 +509,7 @@ const addMarkers = () => {
   console.log('Adding markers to map...')
 
   // 10km 距离限制
-  const MAX_DISTANCE_KM = 10
+  const MAX_DISTANCE_KM = 15
 
   // 过滤出 10km 以内的避暑场所
   const nearbyRefuges = filteredRefuges.value.filter((refuge) => {
